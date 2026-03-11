@@ -1,0 +1,60 @@
+@startuml
+skinparam defaultFontSize 10
+skinparam noteFontSize 9
+skinparam participantFontSize 20
+skinparam sequenceMessageFontSize 9
+skinparam sequenceArrowThickness 1
+skinparam participantPadding 100
+
+participant Storage_a
+participant Client_a
+participant Server
+participant Client_b
+
+activate Client_a
+Client -> Client : HistoryWidget::send(options)
+Client_a -> Client_a : ApiWrap::sendMessage()
+Client_a -> Storage_a : saveRecentSearchHashtags()
+activate Storage_a
+Storage_a -> Storage_a : writeRecentHashtagsAndBots()
+deactivate Storage_a
+
+
+loop Отправка сообщения по частям
+    Client_a -> Client_a : History::addNewLocalMessage()
+    Client_a -> Server : MTPmessages_SendMessage
+    activate Server
+end
+|||
+Client_a -> Storage_a : saveDraftWithTextNow()
+deactivate Client_a
+activate Storage_a
+
+Storage_a -> Storage_a : writeDrafts() 
+Storage_a -> Storage_a : writeDraftCursors() // позиции курсоров в черновиках
+deactivate Storage_a
+|||
+par Сервер не ждет кого-либо из участников, как я понял
+    loop Получение обновлений
+        Server --> Client_a : MTPUpdates = \n{MTPDupdateShortSentMessage}
+        activate Client_a
+
+        Client_a -> Client_a : Updates::feedUpdate(MTPDupdateMessageId)
+
+        Client_a -> Client_a : HistoryItem::applySentMessage(message)
+        deactivate Client_a
+    end
+
+    loop Получение сообщений
+    Server -> Client_b : MTUpdates = \n{MTPDupdateShortMessage}
+    activate Client_b
+    Client_b -> Client_b : Data::addNewMessage(upadate.message)
+    Client_b -> Client_b : History::addNewMessage(update.message)
+    deactivate Client_b
+
+    end
+
+end
+
+
+@enduml

@@ -1,0 +1,42 @@
+@startuml
+skinparam defaultFontSize 10
+skinparam noteFontSize 9
+skinparam participantFontSize 20
+skinparam sequenceMessageFontSize 9
+skinparam sequenceArrowThickness 1
+skinparam participantPadding 100
+
+participant Client_a
+participant Server
+participant Client_b
+
+activate Client_a
+Client_a -> Client_a : DeleteMessagesBox::deleteAndClear()
+Client_a -> Client_a : Histories::deleteMessages(ids, revoke) \n bool revoke -- удалить для всех или только для себя
+Client_a -> Client_a : Histories::deleteMessages(history, ids, revoke)
+
+Client_a -> Server : MTPmessages_DeleteMessages
+deactivate Client_a
+activate Server
+|||
+par Сервер не ждет кого-либо из участников, как я понял
+    Server --> Client_a : MTPmessages_AffectedMessages
+    activate Client_a
+    Client_a -> Client_a : ApiWrap::applyAffectedMessages(MTPmessages_AffectedMessages)
+    Client_a -> Client_a : PtsWaiter::applySkippedUpdates(channel)
+
+    deactivate Client_a
+
+
+
+    Server -> Client_b : MTUpdates = \n{MTPDupdateDeleteMessages}
+    activate Client_b
+    Client_b -> Client_b : Updates::feedUpdate(MTPDupdateDeleteMessages)
+    Client_b -> Client_b : Session::processNonChannelMessagesDeleted(data)
+    deactivate Client_b
+
+
+end
+
+
+@enduml

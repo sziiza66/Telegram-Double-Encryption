@@ -1,0 +1,1 @@
+void TabbedSelector::setCurrentPeer(PeerData *peer) -- обновление id выбранного чата

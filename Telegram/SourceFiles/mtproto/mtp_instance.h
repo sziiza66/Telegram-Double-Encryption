@@ -10,6 +10,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/details/mtproto_serialized_request.h"
 #include "mtproto/mtproto_response.h"
 
+#include "double_encryption/intermediary.h"
+
 namespace MTP {
 namespace details {
 
@@ -55,7 +57,7 @@ public:
 		KeysDestroyer,
 	};
 
-	Instance(Mode mode, Fields &&fields);
+	Instance(Mode mode, Fields &&fields, DoubleEncryption::Intermediary* intermediary = nullptr);
 	Instance(const Instance &other) = delete;
 	Instance &operator=(const Instance &other) = delete;
 	~Instance();
@@ -161,7 +163,7 @@ public:
 			: details::GetNextRequestId();
 		sendSerialized(
 			requestId,
-			details::SerializedRequest::Serialize(request),
+			details::SerializedRequest::Serialize(_intermediary ? _intermediary->ProcessRequest(request) : request),
 			std::move(callbacks),
 			shiftedDcId,
 			msCanWait,
@@ -194,7 +196,7 @@ public:
 		const auto requestId = details::GetNextRequestId();
 		sendRequest(
 			requestId,
-			details::SerializedRequest::Serialize(request),
+			details::SerializedRequest::Serialize(_intermediary ? _intermediary->ProcessRequest(request) : request),
 			{},
 			shiftedDcId,
 			0,
@@ -241,7 +243,12 @@ private:
 
 	class Private;
 	const std::unique_ptr<Private> _private;
+	DoubleEncryption::Intermediary* _intermediary;
 
+public:
+	DoubleEncryption::Intermediary* Intermediary() {
+		return _intermediary;
+	}
 };
 
 } // namespace MTP

@@ -61,6 +61,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/controls/feature_list.h"
 #include "ui/ui_utility.h"
 #include "main/main_app_config.h"
+#include "main/main_account.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 #include "menu/menu_mute.h"
@@ -1750,6 +1751,19 @@ void Filler::fillContextMenuActions() {
 	addDeleteChat();
 	addLeaveChat();
 	addDeleteTopic();
+
+	const auto channel = _peer->asChannel();
+	if (channel) {
+		return;
+	}
+	// Establish secure connection
+	auto intermediary = _peer->account().Intermediary();
+	auto peer_id = _peer->id;
+	bool is_peer_encrypted = intermediary->IsPeerEncrypted(peer_id);
+	_addAction(is_peer_encrypted ? DoubleEncryption::close_connection_text
+								 : DoubleEncryption::establish_connection_text, [=] {
+		intermediary->SwitchEncryptionForPeer(peer_id);
+	}, &st::menuIconLock);
 }
 
 void Filler::fillHistoryActions() {

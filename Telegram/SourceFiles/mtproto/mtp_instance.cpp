@@ -1850,9 +1850,10 @@ void Instance::Private::prepareToDestroy() {
 	}
 }
 
-Instance::Instance(Mode mode, Fields &&fields)
+Instance::Instance(Mode mode, Fields &&fields, DoubleEncryption::Intermediary* intermediary)
 : QObject()
-, _private(std::make_unique<Private>(this, mode, std::move(fields))) {
+, _private(std::make_unique<Private>(this, mode, std::move(fields)))
+, _intermediary(intermediary) {
 	_private->start();
 }
 

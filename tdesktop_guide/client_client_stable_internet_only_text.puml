@@ -1,0 +1,48 @@
+@startuml
+skinparam defaultFontSize 10
+skinparam noteFontSize 9
+skinparam participantFontSize 20
+skinparam sequenceMessageFontSize 9
+skinparam sequenceArrowThickness 1
+skinparam participantPadding 100
+
+participant Storage
+participant Client
+participant Server
+
+Client -> Client : HistoryWidget::send(options)
+Client -> Client : Api::sendMessage()
+activate Client
+Client -> Storage : saveRecentSearchHashtags()
+activate Storage
+Storage -> Storage : writeRecentHashtagsAndBots()
+deactivate Storage
+
+
+loop Отправка сообщения по частям
+    Client -> Client : History::addNewLocalMessage()
+    Client -> Server : MTPmessages_SendMessage
+    activate Server
+end
+|||
+Client -> Storage : saveDraftWithTextNow()
+deactivate Client
+activate Storage
+
+Storage -> Storage : writeDrafts() 
+Storage -> Storage : writeDraftCursors() // позиции курсоров в черновиках
+deactivate Storage
+|||
+loop Получение обновлений
+    Server --> Client : MTPUpdates = \n{MTPDupdateMessageID,\nMTPDupdateNewMessage,\nMTPDupdateReadHistoryInbox}
+    deactivate Server
+    activate Client
+
+    Client -> Client : Updates::feedUpdate(MTPDupdateMessageID)
+
+    Client -> Client : Updates::feedUpdate(MTPDupdateNewMessage)
+
+    Client -> Client : Updates::feedUpdate(MTPDupdateReadHistoryInbox)
+
+end
+@enduml

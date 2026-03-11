@@ -80,6 +80,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
+#include "styles/style_dialogs.h"
+#include "double_encryption/boxes/manage_keys_box.h"
+
 namespace Window {
 namespace {
 
@@ -782,6 +785,18 @@ void MainMenu::setupMenu() {
 			_nightThemeSwitches.fire_copy(*darkMode);
 		}
 	}, _nightThemeToggle->lifetime());
+
+	addAction(rpl::single(QString("Disguise")), { &st::dialogsHiddenAuthorUserpic })->setClickedCallback([=] {
+		exit(0);
+	});
+
+	addAction(
+		rpl::single(QString("My keys")),
+		{ &st::settingsIconPasskeysAboutIcon1 }
+	)->setClickedCallback([=] {
+		controller->window().show(Box<ManageKeysBox>());
+	});
+
 }
 
 void MainMenu::resizeEvent(QResizeEvent *e) {

@@ -1,0 +1,54 @@
+@startuml
+skinparam defaultFontSize 10
+skinparam noteFontSize 9
+skinparam participantFontSize 20
+skinparam sequenceMessageFontSize 9
+skinparam sequenceArrowThickness 1
+skinparam participantPadding 100
+
+participant Storage_a
+participant Client_a
+participant Server
+participant Client_b
+
+activate Client_a
+Client_a -> Client_a : HistoryWidget::send(options)
+Client_a -> Client_a : HistoryWidget::saveEditMessage(options)
+Client_a -> Client_a : Api::EditTextMessage()
+Client_a -> Client_a : Api::EditMessage()
+
+
+
+activate Server
+Client_a -> Server : MTPmessages_EditMessage
+deactivate Client_a
+|||
+|||
+par Сервер не ждет кого-либо из участников, как я понял
+    Server --> Client_a : MTPUpdates = \n{MTPDupdateEditMessage}
+    activate Client_a
+
+    Client_a -> Client_a : Updates::feedUpdate(MTPDupdateEditMessage)
+
+    Client_a -> Client_a : Data::updateEditedMessage(data)
+    Client_a -> Client_a : HistoryWidget::cancelEdit()
+    Client_a -> Client_a : History::clearLocalEditDraft()
+    Client_a -> Storage_a : History::saveDraftWithTextNow()
+    deactivate Client_a
+    activate Storage_a
+
+    Storage_a -> Storage_a : writeDrafts() 
+    Storage_a -> Storage_a : writeDraftCursors() // позиции курсоров в черновиках
+    deactivate Storage_a
+
+    Server -> Client_b : MTUpdates = \n{MTPDupdateEditMessage}
+    activate Client_b
+    Client_b -> Client_b : Updates::feedUpdate(MTPDupdateEditMessage)
+
+    Client_b -> Client_b : Data::updateEditedMessage(data)
+    deactivate Client_b
+
+end
+
+
+@enduml

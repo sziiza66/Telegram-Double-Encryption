@@ -1,0 +1,129 @@
+@startuml
+skinparam defaultFontSize 10
+skinparam noteFontSize 9
+skinparam participantFontSize 20
+skinparam sequenceMessageFontSize 9
+skinparam sequenceArrowThickness 1
+skinparam participantPadding 100
+
+participant Storage_a
+participant Client_a
+participant Server
+participant Client_b
+participant Storage_b
+
+activate Client_a
+Client_a -> Client_a : FileLoadTask::process(Args &&args) выполняется в другом потоке,\nопределяет различную метаинформацию о файле
+Client_a -> Client_a : Api::SendConfirmedFile(sessing, file)
+Client_a -> Client_a : Uploader::upload(itemId, file)
+
+opt кеширование преью файла, если оно есть
+    Client_a -> Storage_a : document->owner().cache().putIfEmpty(...  std::move(file->goodThumbnailBytes) ...)
+    activate Storage_a
+    deactivate Storage_a
+end
+
+opt кеширование файла в случае, если он целиком лежит в поле content
+    Client_a -> Client_a : document->setDataAndCache(file->content)
+    Client_a -> Storage_a : Storage::Cache::Database::put(file->content)
+    activate Storage_a
+    deactivate Storage_a
+end
+
+Client_a -> Client_a : Uploader::maybeSend()
+loop Отправка файла по частям
+    Client_a -> Client_a : const auto maybeDcIndex = chooseDcIndexForNextRequest(usedDcIndices)\nconst auto entry = chooseEntryForNextRequest()\nUploader::sendPart(entry, dcIndex)
+    alt Отправка части файла, читаем её с диска
+        Client_a -> Client_a : Uploader::sendDocPart(entry, dcIndex)
+        alt если entry->docSize > kUseBigFilesFrom
+            Client_a -> Client_a : auto request = MTPupload_SaveBigFilePart(...)
+        else если entry->docSize <= kUseBigFilesFrom
+            Client_a -> Client_a : auto request = MTPupload_SaveFilePart(...)
+        end
+    else Переотправка недошедшей части файла
+        Client_a -> Client_a : Uploader::sendPendingPart(entry, dcIndex)
+        alt если entry->docSize > kUseBigFilesFrom
+            Client_a -> Client_a : auto request = MTPupload_SaveBigFilePart(...)
+        else если entry->docSize <= kUseBigFilesFrom
+            Client_a -> Client_a : auto request = MTPupload_SaveFilePart(...)
+        end
+    else Отправка части файла, читаем из памяти (случай маленького файла)
+        Client_a -> Client_a : Uploader::sendSlicedPart(entry, dcIndex) 
+        Client_a -> Client_a : auto request = MTPupload_SaveFilePart(...)
+    end
+
+    Client_a -> Client_a : Uploader::sendPreparedRequest(request, ...)
+    Client_a -> Server : request (MTPupload_SaveFilePart или MTPupload_SaveBigFilePart)
+    activate Server
+    Server -> Client_a : MTPBool
+    deactivate Server
+    Client_a -> Client_a : partLoaded(MTPBool)
+end
+Client_a -> Client_a : MTPMessageMedia media = MTP_messageMediaPhoto или\n MTP_messageMediaDocument или\n MTP_messageMediaDocument или\n MTP_messageMediaDocument
+Client_a -> Client_a : History::addNewLocalMessage(media, ...)
+|||
+|||
+Client_a -> Client_a : sendUploadedDocument(...)\nконкретный метод отправки зависит от типа файла,\n тут разберём случай .txt документа
+Client_a -> Client_a : ApiWrap::sendMedia(...)
+Client_a -> Client_a : ApiWrap::sendMediaWithRandomId(...)
+Client_a -> Client_a : Histories::sendPreparedMessage(...)
+Client_a -> Server : MTPmessages_SendMedia
+activate Server
+Server -> Client_a : MTPUpdates =\n{MTPDupdateMessageID,\nMTPDupdateNewMessage}
+deactivate Client_a
+Server -> Client_b : MTPUpdates =\n{MTPDupdateNewMessage}
+deactivate Server
+activate Client_b
+Client_b -> Client_b : Открытие чата
+Client_b -> Client_b : DocumentData::save(...) 
+Client_b -> Client_b  : _loader = mtpFileLoader(...)\nЗагрузчикможет быть и каким-то другим,\nэто зависит от того, что загружаем 
+Client_b -> Storage_b : mtpFileLoader::startLoading()
+activate Storage_b
+deactivate Client_b
+Storage_b -> Storage_b : DownloadMtprotoTask::addToQueue()\nmtpFileLoader наследуется от DownloadMtprotoTask
+Storage_b -> Storage_b : task._owner->enqueue(task, ...)
+Storage_b -> Storage_b : DownloadManagerMtproto::checkSendNext(dcId, queue)\ndcId -- это Data Center Id, для каждого\n используемого датацентра есть очередь queue
+loop Отправляем столько запросов, сколько позволит балансировщик этой очереди
+    Storage_b -> Storage_b : DownloadManagerMtproto::trySendNextPart(dcId, queue)\nЗапросы тут могут идти вперемешку для разных задач скачивания,\nэто сетевой параллелизм. 
+    Storage_b -> Storage_b : task->loadPart(bestIndex) обработка следующей части по наименее\nзагруженно MTP сессии (bestIndex -- индекс этой сессии)
+    Storage_b -> Storage_b : DownloadMtprotoTask::sendRequest(requestData)
+    opt В разбираемом случае отправляется MTPupload_GetFile 
+        Storage_b -> Server : MTPupload_GetFile
+        activate Server
+    else
+        Storage_b -> Server : MTPupload_GetWebFile
+    else
+        Storage_b -> Server : MTPupload_GetCdnFile
+    end
+end
+loop ответы сервера, разберем только ответы на MTPupload_GetFile
+    Server -> Storage_b : MTPDupload_file
+    deactivate Server
+    opt 
+        Storage_b -> Storage_b : DownloadMtprotoTask::switchToCDN(MTPDupload_fileCdnRedirect)
+    else если пришёл MTPDupload_file
+        Storage_b -> Storage_b : DownloadMtprotoTask::partLoaded(requestData.offset, data.vbytes().v);
+        Storage_b -> Storage_b : mtpFileLoader::feedPart(offset, bytes)
+        Storage_b -> Storage_b : task._owner->checkSendNextAfterSuccess(dcId)
+        Storage_b -> Storage_b : FileLoader::writeResultPart(offset, bytes)
+        Storage_b -> Storage_b : task._file.seek(offset)
+        Storage_b -> Storage_b : _file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size())
+    end
+end
+Storage_b -> Storage_b : DownloadMtprotoTask::removeFromQueue() когда загрузили все части
+Storage_b -> Storage_b : finalizeResult()
+opt Видимо, если файл маленький, то его запись может произойти в finalizeResult
+    Storage_b -> Storage_b : _file.write(_data)
+end
+opt Если файл открыт
+    Storage_b -> Storage_b : _file.close()\nPlatform::File::PostprocessDownloaded(QFileInfo(_file).absoluteFilePath())
+end
+opt Если файл не найден локально (_localStatus == LocalStatus::NotFound)
+    Storage_b -> Storage_b : const auto key = fileLocationKey()
+    Storage_b -> Storage_b : _session->local().writeFileLocation(*key,Core::FileLocation(_filename))\nСохраним путь к файлу в локальном хранилище
+    opt Если файл достаточно мал, сохраним его в локальном кеше
+        Storage_b -> Storage_b : _session->data().cache().put(cacheKey(), Storage::Cache::Database::TaggedValue(base::duplicate((!_fullSize || _data.size() == _fullSize) ? _data : ("partial:" + _data)), _cacheTag));
+    end
+end
+Storage_b -> Client_b : session->notifyDownloaderTaskFinished()
+@enduml

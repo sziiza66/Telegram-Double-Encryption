@@ -11,6 +11,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/mtp_instance.h"
 #include "base/weak_ptr.h"
 
+#include "double_encryption/intermediary.h"
+
 namespace Storage {
 class Account;
 class Domain;
@@ -167,6 +169,16 @@ private:
 
 	rpl::lifetime _lifetime;
 
+private:
+	std::unique_ptr<DoubleEncryption::Intermediary> intermediary_;
+
+public:
+	DoubleEncryption::Intermediary* Intermediary() {
+		// Получение нулевого intermediary_ означает, что в Account _session тоже ноль,
+		// а intermediary_ не имеет смысла без _session.
+		assert(intermediary_);
+		return intermediary_.get();
+	}
 };
 
 } // namespace Main

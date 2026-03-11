@@ -419,9 +419,18 @@ void Account::startMtp(std::unique_ptr<MTP::Config> config) {
 	fields.config = std::move(config);
 	fields.deviceModel = Platform::DeviceModelPretty();
 	fields.systemVersion = Platform::SystemVersionPretty();
-	_mtp = std::make_unique<MTP::Instance>(
-		MTP::Instance::Mode::Normal,
-		std::move(fields));
+
+	if (_sessionUserId) {
+		intermediary_ = std::make_unique<DoubleEncryption::Intermediary>(this, _sessionUserId);
+
+		_mtp = std::make_unique<MTP::Instance>(
+			MTP::Instance::Mode::Normal,
+			std::move(fields), intermediary_.get());
+	} else {
+		_mtp = std::make_unique<MTP::Instance>(
+			MTP::Instance::Mode::Normal,
+			std::move(fields));
+	}
 
 	const auto writingKeys = _mtp->lifetime().make_state<bool>(false);
 	_mtp->writeKeysRequests(

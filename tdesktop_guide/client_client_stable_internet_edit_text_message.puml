@@ -1,0 +1,44 @@
+@startuml
+skinparam defaultFontSize 10
+skinparam noteFontSize 9
+skinparam participantFontSize 20
+skinparam sequenceMessageFontSize 9
+skinparam sequenceArrowThickness 1
+skinparam participantPadding 10
+
+participant Storage
+participant Client
+participant Server
+
+activate Client
+Client -> Client : HistoryWidget::send(options)
+Client -> Client : HistoryWidget::saveEditMessage(options)
+Client -> Client : Api::EditTextMessage()
+Client -> Client : Api::EditMessage()
+
+
+
+Client -> Server : MTPmessages_EditMessage
+activate Server
+|||
+deactivate Client
+|||
+Server --> Client : MTPUpdates = \n{MTPDupdateEditMessage}
+deactivate Server
+activate Client
+
+Client -> Client : Updates::feedUpdate(MTPDupdateEditMessage)
+
+Client -> Client : Data::updateEditedMessage(data)
+
+Client -> Client : HistoryWidget::cancelEdit()
+Client -> Client : History::clearLocalEditDraft()
+Client -> Storage : History::saveDraftWithTextNow()
+deactivate Client
+activate Storage
+
+Storage -> Storage : writeDrafts() 
+Storage -> Storage : writeDraftCursors() // позиции курсоров в черновиках
+deactivate Storage
+
+@enduml

@@ -774,6 +774,21 @@ PRIVATE
     dialogs/dialogs_top_bar_suggestion.h
     dialogs/dialogs_widget.cpp
     dialogs/dialogs_widget.h
+
+    double_encryption/common.h
+    double_encryption/encryption_key.cpp
+    double_encryption/encryption_key.h
+    double_encryption/intermediary.cpp
+    double_encryption/intermediary.h
+    double_encryption/boxes/manage_keys_box.cpp
+    double_encryption/boxes/manage_keys_box.h
+    double_encryption/storage/secret_storage.cpp
+    double_encryption/storage/secret_storage.h
+    double_encryption/storage/sqlite3.c
+    double_encryption/storage/sqlite3.h
+    double_encryption/storage/sqlite3pp.ipp
+    double_encryption/storage/sqlite3pp.h
+
     editor/color_picker.cpp
     editor/color_picker.h
     editor/controllers/controllers.h

@@ -14,6 +14,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "base/unixtime.h"
 
+#include "double_encryption/intermediary.h"
+
 namespace MTP {
 namespace details {
 
@@ -560,10 +562,10 @@ void Session::tryToReceive() {
 		const auto main = (_shiftedDcId == BareDcId(_shiftedDcId));
 		for (const auto &message : messages) {
 			if (message.requestId) {
-				instance->processCallback(message);
+				instance->processCallback(instance->Intermediary() ? instance->Intermediary()->ProcessResponse(message) : message);
 			} else if (main) {
 				// Process updates only in main session.
-				instance->processUpdate(message);
+				instance->processUpdate(instance->Intermediary() ? instance->Intermediary()->ProcessResponse(message) : message);
 			}
 			if (!instance) {
 				return;
