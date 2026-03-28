@@ -130,6 +130,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QAction>
 #include <QtWidgets/QApplication>
 
+#include "double_encryption/texts_and_titles.h"
+#include "double_encryption/boxes/keys_list.h"
+#include "double_encryption/boxes/wait_box.h"
+#include "double_encryption/storage/settings_manager.h"
+
 namespace Window {
 namespace {
 
@@ -1760,9 +1765,37 @@ void Filler::fillContextMenuActions() {
 	auto intermediary = _peer->account().Intermediary();
 	auto peer_id = _peer->id;
 	bool is_peer_encrypted = intermediary->IsPeerEncrypted(peer_id);
-	_addAction(is_peer_encrypted ? DoubleEncryption::close_connection_text
-								 : DoubleEncryption::establish_connection_text, [=] {
-		intermediary->SwitchEncryptionForPeer(peer_id);
+	auto controller = _controller;
+	_addAction(is_peer_encrypted ? DoubleEncryption::peer_context_menu_close_connection_button_name
+								 : DoubleEncryption::peer_context_menu_establish_connection_button_name,
+			   [=] {
+		if (peer_id == intermediary->GetSelfId()) {
+			intermediary->SwitchEncryptionForSelf();
+		} else if (peerIsUser(peer_id)) {
+			if (!intermediary->IsPeerEncrypted(peer_id)) {
+				if (controller->showFrozenError()) {
+					return;
+				}
+				controller->show(DoubleEncryption::PreparePublicKeysSelectionList(controller, 
+					[=](const DoubleEncryption::AuthKeyInfo& info) {
+						bool success = intermediary->TryToEstablishSecureConnectionWithUser(controller, info.fingerprint, peer_id);
+						if (success && !controller->showFrozenError()) {
+							controller->show(Box<DoubleEncryption::WaitBox>(
+								DoubleEncryption::secure_connection_wait_box_text_,
+								[=]() {
+									intermediary->CancelAuth();
+								},
+								intermediary->GetAuthStream(),
+								peer_id
+							));
+						}
+						return success;
+					}
+				));
+			} else {
+				intermediary->DisableEncryptionForPeer(peer_id);
+			}
+		}
 	}, &st::menuIconLock);
 }
 

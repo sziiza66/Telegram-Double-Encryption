@@ -19,6 +19,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/concurrent_timer.h"
 #include "base/options.h"
 
+#include "double_encryption/storage/settings_manager.h"
+
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QLibraryInfo>
@@ -325,6 +327,8 @@ Launcher::Launcher(int argc, char *argv[])
 	crl::toggle_fp_exceptions(true);
 
 	base::Integration::Set(&_baseIntegration);
+	ApiId = DoubleEncryption::SettingsManager::Instance().GetApiId();
+	ApiHash = DoubleEncryption::SettingsManager::Instance().GetApiHash();
 }
 
 Launcher::~Launcher() {

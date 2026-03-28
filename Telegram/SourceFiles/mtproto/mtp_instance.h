@@ -163,7 +163,7 @@ public:
 			: details::GetNextRequestId();
 		sendSerialized(
 			requestId,
-			details::SerializedRequest::Serialize(_intermediary ? _intermediary->ProcessRequest(request) : request),
+			details::SerializedRequest::Serialize(intermediary_ ? intermediary_->ProcessRequest(request) : request),
 			std::move(callbacks),
 			shiftedDcId,
 			msCanWait,
@@ -196,7 +196,7 @@ public:
 		const auto requestId = details::GetNextRequestId();
 		sendRequest(
 			requestId,
-			details::SerializedRequest::Serialize(_intermediary ? _intermediary->ProcessRequest(request) : request),
+			details::SerializedRequest::Serialize(intermediary_ ? intermediary_->ProcessRequest(request) : request),
 			{},
 			shiftedDcId,
 			0,
@@ -243,11 +243,15 @@ private:
 
 	class Private;
 	const std::unique_ptr<Private> _private;
-	DoubleEncryption::Intermediary* _intermediary;
+	DoubleEncryption::Intermediary* intermediary_;
 
 public:
+	void SetIntermediary(DoubleEncryption::Intermediary* intermediary) {
+		intermediary_ = intermediary;
+	}
+
 	DoubleEncryption::Intermediary* Intermediary() {
-		return _intermediary;
+		return intermediary_;
 	}
 };
 

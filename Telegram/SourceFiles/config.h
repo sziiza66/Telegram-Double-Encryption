@@ -10,6 +10,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/version.h"
 #include "settings.h"
 
+#include "double_encryption/storage/settings_manager.h"
+
 enum {
 	MaxSelectedItems = 100,
 
@@ -63,34 +65,37 @@ w/CVnbwQOw0g5GBwwFV3r0uTTvy44xx8XXxk+Qknu4eBCsmrAFNnAgMBAAE=\n\
 -----END RSA PUBLIC KEY-----\
 ";
 
-#if defined TDESKTOP_API_ID && defined TDESKTOP_API_HASH
+// #if defined TDESKTOP_API_ID && defined TDESKTOP_API_HASH
 
-constexpr auto ApiId = TDESKTOP_API_ID;
-constexpr auto ApiHash = QT_STRINGIFY(TDESKTOP_API_HASH);
+// constexpr auto ApiId = TDESKTOP_API_ID;
+// constexpr auto ApiHash = QT_STRINGIFY(TDESKTOP_API_HASH);
 
-#else // TDESKTOP_API_ID && TDESKTOP_API_HASH
+// #else // TDESKTOP_API_ID && TDESKTOP_API_HASH
 
-// To build your version of Telegram Desktop you're required to provide
-// your own 'api_id' and 'api_hash' for the Telegram API access.
-//
-// How to obtain your 'api_id' and 'api_hash' is described here:
-// https://core.telegram.org/api/obtaining_api_id
-//
-// If you're building the application not for deployment,
-// but only for test purposes you can comment out the error below.
-//
-// This will allow you to use TEST ONLY 'api_id' and 'api_hash' which are
-// very limited by the Telegram API server.
-//
-// Your users will start getting internal server errors on login
-// if you deploy an app using those 'api_id' and 'api_hash'.
+// // To build your version of Telegram Desktop you're required to provide
+// // your own 'api_id' and 'api_hash' for the Telegram API access.
+// //
+// // How to obtain your 'api_id' and 'api_hash' is described here:
+// // https://core.telegram.org/api/obtaining_api_id
+// //
+// // If you're building the application not for deployment,
+// // but only for test purposes you can comment out the error below.
+// //
+// // This will allow you to use TEST ONLY 'api_id' and 'api_hash' which are
+// // very limited by the Telegram API server.
+// //
+// // Your users will start getting internal server errors on login
+// // if you deploy an app using those 'api_id' and 'api_hash'.
 
-#error You are required to provide API_ID and API_HASH.
+// #error You are required to provide API_ID and API_HASH.
 
-constexpr auto ApiId = 17349;
-constexpr auto ApiHash = "344583e45741c457fe1862106095a5eb";
+// constexpr auto ApiId = 17349;
+// constexpr auto ApiHash = "344583e45741c457fe1862106095a5eb";
 
-#endif // TDESKTOP_API_ID && TDESKTOP_API_HASH
+// #endif // TDESKTOP_API_ID && TDESKTOP_API_HASH
+
+auto ApiId = 0;
+const char* ApiHash = nullptr;
 
 #if Q_BYTE_ORDER == Q_BIG_ENDIAN
 #error "Only little endian is supported!"

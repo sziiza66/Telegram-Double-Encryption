@@ -14,6 +14,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_controller.h"
 #include "lang/lang_keys.h"
 
+#include "double_encryption/storage/settings_manager.h"
+
 namespace Ui {
 
 namespace {
@@ -31,7 +33,7 @@ I'm trying to use my mobile phone number: ") + phone + qsl("\n\
 But Telegram says it's banned. Please help.\n\
 \n\
 App version: ") + version + qsl("\n\
-OS version: ") + ::Platform::SystemVersionPretty() + qsl("\n\
+OS version: ") + DoubleEncryption::SettingsManager::Instance().GetSystemVersion() + qsl("\n\
 Locale: ") + ::Platform::SystemLanguage();
 
 	const auto url = "mailto:?to="

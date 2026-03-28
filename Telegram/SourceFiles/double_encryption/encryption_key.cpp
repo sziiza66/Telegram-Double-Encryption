@@ -21,17 +21,16 @@ namespace DoubleEncryption {
 EncryptionKey::EncryptionKey(const Data &data) : _key(data) {
 }
 
-void EncryptionKey::prepareAES(const MTPint128 &msgKey, MTPint256 &aesKey, MTPint256 &aesIV, bool send) const {
-	uint32 x = send ? 0 : 8;
+void EncryptionKey::prepareAES(const MTPint128 &msgKey, MTPint256 &aesKey, MTPint256 &aesIV) const {
 
 	bytes::array<32> sha256_a, sha256_b;
 	bytes::array<16 + 36> data_a;
 	memcpy(data_a.data(), &msgKey, 16);
-	memcpy(data_a.data() + 16, _key.data() + x, 36);
+	memcpy(data_a.data() + 16, _key.data(), 36);
 	openssl::Sha256To(sha256_a, data_a);
 
 	bytes::array<36 + 16> data_b;
-	memcpy(data_b.data(), _key.data() + 40 + x, 36);
+	memcpy(data_b.data(), _key.data() + 40, 36);
 	memcpy(data_b.data() + 36, &msgKey, 16);
 	openssl::Sha256To(sha256_b, data_b);
 
@@ -45,8 +44,8 @@ void EncryptionKey::prepareAES(const MTPint128 &msgKey, MTPint256 &aesKey, MTPin
 	memcpy(iv + 8 + 16, sha256_b.data() + 24, 8);
 }
 
-const void *EncryptionKey::partForMsgKey(bool send) const {
-	return _key.data() + 88 + (send ? 0 : 8);
+const void *EncryptionKey::partForMsgKey() const {
+	return _key.data() + 88;
 }
 
 bytes::const_span EncryptionKey::data() const {
@@ -67,6 +66,18 @@ TimeId EncryptionKey::expiresAt() const {
 
 void EncryptionKey::setExpiresAt(TimeId expiresAt) {
 	_expiresAt = expiresAt;
+}
+
+void EncryptionKey::FillData(Data &authKey, bytes::const_span computedAuthKey) {
+	auto computedAuthKeySize = computedAuthKey.size();
+	Assert(computedAuthKeySize <= kSize);
+	auto authKeyBytes = gsl::make_span(authKey);
+	if (computedAuthKeySize < kSize) {
+		bytes::set_with_const(authKeyBytes.subspan(0, kSize - computedAuthKeySize), gsl::byte());
+		bytes::copy(authKeyBytes.subspan(kSize - computedAuthKeySize), computedAuthKey);
+	} else {
+		bytes::copy(authKeyBytes, computedAuthKey);
+	}
 }
 
 void aesIgeEncryptRaw(const void *src, void *dst, uint32 len, const void *key, const void *iv) {

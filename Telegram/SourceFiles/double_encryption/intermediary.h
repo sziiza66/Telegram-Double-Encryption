@@ -1,8 +1,12 @@
 #pragma once
 
+#include <atomic>
+#include <unordered_map>
 #include "mtproto/mtproto_response.h"
 #include "scheme.h"
+
 #include "storage/secret_storage.h"
+#include "auth_state.h"
 
 class PeerId;
 class PeerData;
@@ -13,18 +17,43 @@ class Account;
 
 }
 
+namespace Window {
+
+class SessionController;
+
+}
+
 namespace DoubleEncryption {
 
 class Intermediary {
     using Account = Main::Account;
 
+    enum class ErrorCode {
+        OK = 0,
+        DEC_ERROR = 1,
+        DISGUISED = 2,
+    };
+
+public:
+    using DoneCallback = std::function<void(const MTPUpdates&, const MTP::Response&)>;
+    using FailCallback = std::function<void(const MTP::Error&, const MTP::Response&)>;
+
 public:
     Intermediary(Account* account, UserId self_id);
+    Intermediary(const Intermediary&) = delete;
+    Intermediary(Intermediary&&) = delete;
 
+    PeerId GetSelfId() const;
+    std::shared_ptr<rpl::event_stream<PeerId>> GetAuthStream();
+    void CancelAuth();
     bool IsPeerEncrypted(PeerId peer_id);
-    void SwitchEncryptionForPeer(PeerId peer_id);
-
-    EncryptionKeyPtr GenerateSecret() const;
+    void SwitchEncryptionForSelf();
+    void EnableEncryptionForPeer(EncryptionKeyPtr key, PeerId peer_id, MsgId64 msg_begin_id);
+    void DisableEncryptionForPeer(PeerId peer_id);
+    void SendE2EServiceMessage(const QString& text, PeerId peer_id, DoneCallback done, FailCallback fail);
+    bool TryToEstablishSecureConnectionWithUser(not_null<Window::SessionController*> controller, const QString& fingerprint, PeerId peer_id);
+    bool TryToAcceptEncryptionRequest(const QString& request, const QString& fingerprint, PeerId peer_id, MsgId64 msg_id);
+    bool TryToAcceptEncryptionResponse(const QByteArray& response, PeerId peer_id, MsgId64 msg_id);
 
     // Ничего не делаем, если для сообщения сделать нечего.
     // Возможно, стоит кидать ошибку компиляции, в случае неизвестного
@@ -45,6 +74,10 @@ public:
     MTP::Response ProcessResponse(const MTP::Response& response);
 
 private:
+    QByteArray SerializeInitiatorDH(const DHAuthState& state, PeerId initiator_id);
+    DHAuthPart DeserializeDHPart(const QByteArray& serialized);
+    QByteArray SerializeDHPart(const DHAuthPart& initiator_part, bytes::const_span g_b);
+
     PeerId peerFromMTPInput(const MTPInputPeer& peer);
 
     MTPInputSingleMedia EncryptMTPInputSingleMedia(const MTPInputSingleMedia& media, EncryptionKeyPtr key) const;
@@ -94,10 +127,13 @@ private:
 
 private:
     SecretStorage storage_;
+    DHAuthStatePtr dm_auth_state_;
+    std::shared_ptr<rpl::event_stream<PeerId>> auth_stream_;
     Account* account_;  // Не ноль, аккаунт гарантированно существует, пока существует Intermediary, т.к. первый им
-                        // управляет через unique_ptr
-    PeerId self_id_;
+    // управляет через unique_ptr
     // Вообще self_id, я лишний раз тут храню это, потому что получить это можно из session, но пока оставлю так.
+    PeerId self_id_;
+    ErrorCode error_code_ = ErrorCode::OK;
 
 private:
     // Самое короткое, что я нашел из того, что пропускает телеграм.

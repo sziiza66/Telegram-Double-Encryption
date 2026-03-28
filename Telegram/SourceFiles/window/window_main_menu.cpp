@@ -81,7 +81,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 
 #include "styles/style_dialogs.h"
-#include "double_encryption/boxes/manage_keys_box.h"
+#include "double_encryption/boxes/keys_list.h"
+#include "double_encryption/texts_and_titles.h"
+#include "double_encryption/storage/settings_manager.h"
 
 namespace Window {
 namespace {
@@ -786,15 +788,20 @@ void MainMenu::setupMenu() {
 		}
 	}, _nightThemeToggle->lifetime());
 
-	addAction(rpl::single(QString("Disguise")), { &st::dialogsHiddenAuthorUserpic })->setClickedCallback([=] {
-		exit(0);
+	addAction(
+		rpl::single(QString(DoubleEncryption::settings_manage_public_keys_button_name)),
+		{ &st::settingsIconPasskeysAboutIcon1 }
+	)->setClickedCallback([=] {
+		// controller->window().show(Box<ManageKeysBox>());
+		controller->window().show(DoubleEncryption::PrepareManageKeysList(controller, true));
 	});
 
 	addAction(
-		rpl::single(QString("My keys")),
+		rpl::single(QString(DoubleEncryption::settings_manage_private_keys_button_name)),
 		{ &st::settingsIconPasskeysAboutIcon1 }
 	)->setClickedCallback([=] {
-		controller->window().show(Box<ManageKeysBox>());
+		// controller->window().show(Box<ManageKeysBox>());
+		controller->window().show(DoubleEncryption::PrepareManageKeysList(controller, false));
 	});
 
 }

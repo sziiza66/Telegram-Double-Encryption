@@ -20,6 +20,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "webrtc/webrtc_device_common.h"
 #include "window/section_widget.h"
 
+#include "double_encryption/storage/settings_manager.h"
+
 namespace Core {
 namespace {
 
@@ -1225,7 +1227,7 @@ void Settings::setThirdColumnWidth(int width) {
 
 QString Settings::deviceModel() const {
 	const auto custom = customDeviceModel();
-	return custom.isEmpty() ? Platform::DeviceModelPretty() : custom;
+	return custom.isEmpty() ? DoubleEncryption::SettingsManager::Instance().GetDeviceModel() : custom;
 }
 
 rpl::producer<QString> Settings::deviceModelChanges() const {

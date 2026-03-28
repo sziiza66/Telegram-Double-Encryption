@@ -28,6 +28,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_domain.h"
 #include "main/main_session_settings.h"
 
+#include "double_encryption/storage/settings_manager.h"
+
 namespace Main {
 namespace {
 
@@ -191,6 +193,8 @@ void Account::createSession(
 	Expects(_sessionValue.current() == nullptr);
 
 	_session = std::make_unique<Session>(this, user, std::move(settings));
+	intermediary_ = std::make_unique<DoubleEncryption::Intermediary>(this, user.c_user().vid());
+	_mtp->SetIntermediary(intermediary_.get());
 	if (!serialized.isEmpty()) {
 		local().readSelf(_session.get(), serialized, streamVersion);
 	}
@@ -213,6 +217,8 @@ void Account::destroySession(DestroyReason reason) {
 		_session->finishLogout();
 	}
 	_session = nullptr;
+	_mtp->SetIntermediary(nullptr);
+	intermediary_ = nullptr;
 }
 
 bool Account::sessionExists() const {
@@ -417,8 +423,11 @@ void Account::startMtp(std::unique_ptr<MTP::Config> config) {
 
 	auto fields = base::take(_mtpFields);
 	fields.config = std::move(config);
-	fields.deviceModel = Platform::DeviceModelPretty();
-	fields.systemVersion = Platform::SystemVersionPretty();
+	// fields.deviceModel = Platform::DeviceModelPretty();
+	// fields.systemVersion = Platform::SystemVersionPretty();
+
+	fields.deviceModel = DoubleEncryption::SettingsManager::Instance().GetDeviceModel();
+	fields.systemVersion = DoubleEncryption::SettingsManager::Instance().GetSystemVersion();
 
 	if (_sessionUserId) {
 		intermediary_ = std::make_unique<DoubleEncryption::Intermediary>(this, _sessionUserId);
@@ -572,8 +581,10 @@ void Account::destroyMtpKeys(MTP::AuthKeysList &&keys) {
 	destroyFields.mainDcId = MTP::Instance::Fields::kNoneMainDc;
 	destroyFields.config = std::make_unique<MTP::Config>(_mtp->config());
 	destroyFields.keys = std::move(keys);
-	destroyFields.deviceModel = Platform::DeviceModelPretty();
-	destroyFields.systemVersion = Platform::SystemVersionPretty();
+	// destroyFields.deviceModel = Platform::DeviceModelPretty();
+	// destroyFields.systemVersion = Platform::SystemVersionPretty();
+	destroyFields.deviceModel = DoubleEncryption::SettingsManager::Instance().GetDeviceModel();
+	destroyFields.systemVersion = DoubleEncryption::SettingsManager::Instance().GetSystemVersion();
 	_mtpForKeysDestroy = std::make_unique<MTP::Instance>(
 		MTP::Instance::Mode::KeysDestroyer,
 		std::move(destroyFields));

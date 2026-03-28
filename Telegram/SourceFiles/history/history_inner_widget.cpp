@@ -74,6 +74,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "base/call_delayed.h"
 #include "main/main_session.h"
+#include "main/main_account.h"
 #include "main/main_session_settings.h"
 #include "mainwidget.h"
 #include "menu/menu_item_download_files.h"
@@ -111,6 +112,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 #include <QtWidgets/QApplication>
 #include <QtCore/QMimeData>
+
+#include "double_encryption/texts_and_titles.h"
+#include "double_encryption/boxes/keys_list.h"
+#include "double_encryption/storage/settings_manager.h"
 
 namespace {
 
@@ -2640,6 +2645,33 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						&st::menuIconStats);
 				}
 			}
+		}
+
+		if (!item->hasRealFromId()) {
+			return;
+		}
+		auto intermediary = session->account().Intermediary();
+		PeerId peer_id = itemId.peer;
+		PeerId from_id = item->from()->id;
+		MsgId msg_id = itemId.msg;
+		if (peer_id == from_id
+		 && peerIsUser(peer_id)
+		 && !item->isService()
+		 && session->userPeerId() != peer_id
+		 && !intermediary->IsPeerEncrypted(peer_id)) {
+			auto text = item->originalText().text;
+			_menu->addAction(
+				QString(DoubleEncryption::interpret_message_as_encryption_request_button_name),
+				crl::guard(controller, [=] {
+					controller->window().show(DoubleEncryption::PreparePublicKeysSelectionList(
+						controller,
+						[=](const DoubleEncryption::AuthKeyInfo& info) {
+							return intermediary->TryToAcceptEncryptionRequest(text, info.fingerprint, peer_id, msg_id.bare);
+						}
+					));
+				}),
+				&st::menuIconLock
+			);
 		}
 	};
 	const auto addPhotoActions = [&](not_null<PhotoData*> photo, HistoryItem *item) {

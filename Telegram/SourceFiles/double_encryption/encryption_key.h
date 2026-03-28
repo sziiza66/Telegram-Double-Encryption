@@ -37,9 +37,9 @@ public:
 	EncryptionKey(const EncryptionKey &other) = delete;
 	EncryptionKey &operator=(const EncryptionKey &other) = delete;
 
-	void prepareAES(const MTPint128 &msgKey, MTPint256 &aesKey, MTPint256 &aesIV, bool send) const;
+	void prepareAES(const MTPint128 &msgKey, MTPint256 &aesKey, MTPint256 &aesIV) const;
 
-	[[nodiscard]] const void *partForMsgKey(bool send) const;
+	[[nodiscard]] const void *partForMsgKey() const;
 
 	[[nodiscard]] bytes::const_span data() const;
 	[[nodiscard]] bool equals(const std::shared_ptr<EncryptionKey> &other) const;
@@ -47,6 +47,8 @@ public:
 	[[nodiscard]] crl::time creationTime() const; // > 0 if known.
 	[[nodiscard]] TimeId expiresAt() const;
 	void setExpiresAt(TimeId expiresAt);
+
+	static void FillData(Data &authKey, bytes::const_span computedAuthKey);
 
 private:
 	Data _key = { { gsl::byte{} } };
@@ -62,14 +64,14 @@ void aesIgeDecryptRaw(const void *src, void *dst, uint32 len, const void *key, c
 
 inline void aesIgeEncrypt(const void *src, void *dst, uint32 len, const EncryptionKeyPtr &encryptionKey, const MTPint128 &msgKey) {
 	MTPint256 aesKey, aesIV;
-	encryptionKey->prepareAES(msgKey, aesKey, aesIV, true);
+	encryptionKey->prepareAES(msgKey, aesKey, aesIV);
 
 	return aesIgeEncryptRaw(src, dst, len, static_cast<const void*>(&aesKey), static_cast<const void*>(&aesIV));
 }
 
 inline void aesIgeDecrypt(const void *src, void *dst, uint32 len, const EncryptionKeyPtr &encryptionKey, const MTPint128 &msgKey) {
 	MTPint256 aesKey, aesIV;
-	encryptionKey->prepareAES(msgKey, aesKey, aesIV, true);
+	encryptionKey->prepareAES(msgKey, aesKey, aesIV);
 
 	return aesIgeDecryptRaw(src, dst, len, static_cast<const void*>(&aesKey), static_cast<const void*>(&aesIV));
 }

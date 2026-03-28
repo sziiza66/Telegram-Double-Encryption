@@ -89,6 +89,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/file_upload.h"
 #include "storage/storage_account.h"
 
+#include "double_encryption/common.h"
+
 namespace {
 
 // Save draft to the cloud with 1 sec extra delay.
@@ -4019,7 +4021,8 @@ void ApiWrap::sendMessage(
 
 	const auto exactWebPage = !message.webPage.url.isEmpty();
 	auto isFirst = true;
-	while (TextUtilities::CutPart(sending, left, MaxMessageSize)
+	bool is_encrypted = _session->account().Intermediary()->IsPeerEncrypted(peer->id);
+	while (TextUtilities::CutPart(sending, left, is_encrypted ? DoubleEncryption::kMaxMessageSizeWhenEncrypted : MaxMessageSize)
 		|| (isFirst && exactWebPage)) {
 		TextUtilities::Trim(left);
 		const auto isLast = left.empty();

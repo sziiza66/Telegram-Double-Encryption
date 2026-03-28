@@ -2,6 +2,7 @@
 
 #include "data/data_peer_id.h"
 
+#include <filesystem>
 #include <optional>
 #include <limits>
 #include <unordered_map>
@@ -9,37 +10,46 @@
 
 #include "double_encryption/encryption_key.h"
 #include "double_encryption/common.h"
-#include "sqlite3pp.h"
+#include "sqlite/sqlite3pp.h"
 
 class PeerId;
 
 namespace DoubleEncryption {
 
 struct PeerIdHash {
-    size_t operator()(const PeerId &id) const noexcept {
+    size_t operator()(const PeerId& id) const noexcept {
         return std::hash<uint64>{}(id.value);
     }
 };
 
 class SecretStorage {
+    using Path = std::filesystem::path;
     using DataBase = sqlite3pp::database;
 
     struct IntervalEnding {
-        EncryptionKeyPtr key; // null if message is not encrypted.
+        EncryptionKeyPtr key;  // null if message is not encrypted.
         MsgId64 msg_end_id;
     };
 
 public:
-    SecretStorage(PeerId self_id);
+    SecretStorage(const Path& secret_storage_dir_path, PeerId self_id);
 
     void OpenNewInterval(PeerId peer_id, MsgId64 msg_beg_id, EncryptionKeyPtr key);
     void CloseInterval(PeerId peer_id, MsgId64 msg_end_id);
 
     IntervalEnding FindKey(PeerId peer_id, MsgId64 msg_id);
-    EncryptionKeyPtr GetCurrentEncryptionKey(PeerId peer_id); // Доступ к текущему ключу быстрее с этим методом.
+    EncryptionKeyPtr GetCurrentEncryptionKey(PeerId peer_id);  // Доступ к текущему ключу быстрее с этим методом.
     bool IsPeerEncrypted(PeerId peer_id) const;
 
 private:
+    static DataBase LoadDB(const Path& db_path);
+    std::unordered_set<PeerId, PeerIdHash> LoadCurrentlyEncrypted(DataBase& db);
+
+    static void ExecOrThrow(DataBase& db, const std::string& sql, const std::string& context);
+    static void ExecCmdOrThrow(DataBase& db, sqlite3pp::command& cmd, const std::string& context);
+
+private:
+    Path db_path_;
     DataBase db_;
     // Поддерживаем кеш полуинтервалов [msg_begin_id, msg_end_id), key,
     // Хранятся и интервалы без шифрования с key = nullptr.
@@ -51,6 +61,7 @@ private:
     // Значения для обозначения "бесконечных" (+inf и -inf) границ интервалов шифрования.
     static constexpr MsgId64 kLargestMsgId64 = std::numeric_limits<MsgId64>::max();
     static constexpr MsgId64 kSmallestMsgId64 = std::numeric_limits<MsgId64>::min();
+    static const std::string kLargestMsgId64Str;
 };
 
 };  // namespace DoubleEncryption

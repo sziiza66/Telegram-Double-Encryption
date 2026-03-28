@@ -42,6 +42,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
 
+#include "double_encryption/storage/settings_manager.h"
+
 namespace Settings {
 namespace {
 
@@ -134,7 +136,7 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 		object_ptr<Ui::InputField>(
 			box,
 			st::settingsDeviceName,
-			rpl::single(Platform::DeviceModelPretty()),
+			rpl::single(DoubleEncryption::SettingsManager::Instance().GetDeviceModel()),
 			Core::App().settings().customDeviceModel()),
 		st::boxRowPadding - style::margins(
 			st::settingsDeviceName.textMargins.left(),
