@@ -188,15 +188,24 @@ void Intermediary::SendE2EServiceMessage(const QString& text, PeerId peer_id, Do
 }
 
 bool Intermediary::TryToEstablishSecureConnectionWithUser(not_null<Window::SessionController*> controller,
-                                                          const QString& fingerprint,
+                                                          const QString& enc_fingerprint,
+                                                          const QString& sig_fingerprint,
                                                           PeerId peer_id) {
     assert(!IsPeerEncrypted(peer_id) && peer_id != self_id_ && peerIsUser(peer_id));
-    dm_auth_state_ = MakeDH(peer_id);
-    if (!dm_auth_state_) {
+    dm_auth_state_ = std::make_unique<DMAuthState>(MakeDH(peer_id), sig_fingerprint, enc_fingerprint);
+    if (!dm_auth_state_ || dm_auth_state_->state.acceptor_id == 0) {
         return false;
     }
 
-    QByteArray encrypted_data = GPGManager::Instance().EncryptData(SerializeInitiatorDH(*dm_auth_state_, self_id_), fingerprint);
+    dm_auth_state_->enc_fingerprint = enc_fingerprint;
+    dm_auth_state_->sig_fingerprint = sig_fingerprint;
+
+    QByteArray encrypted_data = GPGManager::Instance().SignAndEncryptData(
+        SerializeInitiatorDH(dm_auth_state_->state, self_id_),
+        sig_fingerprint,
+        enc_fingerprint
+    );
+
     if (encrypted_data.isEmpty()) {
         return false;
     }
@@ -212,11 +221,15 @@ bool Intermediary::TryToEstablishSecureConnectionWithUser(not_null<Window::Sessi
     return true;
 }
 
-bool Intermediary::TryToAcceptEncryptionRequest(const QString& request, const QString& fingerprint, PeerId peer_id, MsgId64 msg_id) {
+Intermediary::EncryptionRequestInfo Intermediary::TryToAcceptEncryptionRequest(const QString& request, PeerId peer_id, MsgId64 msg_id) {
     assert(self_id_);
-    auto request_decrypted = GPGManager::Instance().DecryptData(FromBase91(request.toUtf8()));
-    if (request_decrypted.isEmpty()) {
-        return false;
+    auto [sig_fingerprint, enc_fingerprint, ok, request_decrypted] = GPGManager::Instance().DecryptAndVerifyData(FromBase91(request.toUtf8()));
+
+    if (!ok ||
+        request_decrypted.isEmpty() ||
+        sig_fingerprint.isEmpty() ||
+        enc_fingerprint.isEmpty()) {
+        return {};
     }
 
     auto request_deserialized = DeserializeDHPart(request_decrypted);
@@ -226,21 +239,21 @@ bool Intermediary::TryToAcceptEncryptionRequest(const QString& request, const QS
         !IsPrimeGood(request_deserialized.params.prime) ||
         !IsGGood(request_deserialized.params.g) ||
         !IsGAGood(request_deserialized.params.g_a, request_deserialized.params.prime)) {
-        return false;
+        return {};
     }
 
     auto acceptor_private = MakeDHAcceptorPrivate(request_deserialized);
 
     auto data = SerializeDHPart(request_deserialized, acceptor_private.g_b);
     
-    auto encrypted_data = GPGManager::Instance().EncryptData(data, fingerprint);
+    auto encrypted_data = GPGManager::Instance().SignAndEncryptData(data, enc_fingerprint, sig_fingerprint);
     if (encrypted_data.isEmpty()) {
-        return false;
+        return {};
     }
 
     auto key = CreateKey(request_deserialized.params.g_a, acceptor_private.b, request_deserialized.params.prime);
     if (!key) {
-        return false;
+        return {};
     }
 
     SendE2EServiceMessage(ToBase91(encrypted_data), peer_id,
@@ -266,31 +279,37 @@ bool Intermediary::TryToAcceptEncryptionRequest(const QString& request, const QS
     );
     
     EnableEncryptionForPeer(key, peer_id, last_msg_id + 1);
-    return true;
+    return {sig_fingerprint, enc_fingerprint};
 }
 
 bool Intermediary::TryToAcceptEncryptionResponse(const QByteArray& response, PeerId peer_id, MsgId64 msg_id) {
     assert(!storage_.IsPeerEncrypted(peer_id));
     assert(self_id_);
     assert(peer_id);
-    assert(dm_auth_state_ && dm_auth_state_->acceptor_id == peer_id && peer_id != self_id_);
+    assert(dm_auth_state_ && dm_auth_state_->state.acceptor_id == peer_id && peer_id != self_id_);
 
-    auto decrypted = GPGManager::Instance().DecryptData(FromBase91(response));
-    if (decrypted.isEmpty()) {
+    auto [sig_fingerprint, enc_fingerprint, ok, decrypted] = GPGManager::Instance().DecryptAndVerifyData(FromBase91(response));
+    
+    if (!ok ||
+        decrypted.isEmpty() ||
+        sig_fingerprint.isEmpty() ||
+        enc_fingerprint.isEmpty() ||
+        dm_auth_state_->enc_fingerprint != sig_fingerprint ||
+        dm_auth_state_->sig_fingerprint != enc_fingerprint) {
         return false;
     }
 
     auto state = DeserializeDHPart(decrypted);
     if (state.acceptor_id != peer_id ||
         state.initiator_id != self_id_ ||
-        state.nonce != dm_auth_state_->nonce ||
-        state.params.g != dm_auth_state_->params.g ||
-        bytes::compare(bytes::make_span(dm_auth_state_->params.prime), bytes::make_span(state.params.prime)) != 0 ||
+        state.nonce != dm_auth_state_->state.nonce ||
+        state.params.g != dm_auth_state_->state.params.g ||
+        bytes::compare(bytes::make_span(dm_auth_state_->state.params.prime), bytes::make_span(state.params.prime)) != 0 ||
         !IsGAGood(state.params.g_a, state.params.prime)) {
         return false;
     }
 
-    auto key = CreateKey(state.params.g_a, dm_auth_state_->params.a, dm_auth_state_->params.prime);
+    auto key = CreateKey(state.params.g_a, dm_auth_state_->state.params.a, dm_auth_state_->state.params.prime);
     if (!key) {
         return false;
     }
@@ -319,7 +338,6 @@ bool Intermediary::TryToAcceptEncryptionResponse(const QByteArray& response, Pee
 MTPmessages_SendMessage Intermediary::ProcessRequest(const MTPmessages_SendMessage& request) {
     auto peer_id = peerFromMTPInput(request._peer);
     auto key = storage_.GetCurrentEncryptionKey(peer_id);
-    auto& settings = SettingsManager::Instance();
 
     if (!key) {
         return request;
@@ -796,7 +814,7 @@ MTPMessage Intermediary::ProcessMessage(const MTPMessage& message) {
             auto peer_id = peerFromMTP(data.vpeer_id());
             PeerId from_id = data.vfrom_id() ? peerFromMTP(*data.vfrom_id()) : 0;
 
-            if (dm_auth_state_ && dm_auth_state_->acceptor_id == peer_id && peer_id == from_id) {
+            if (dm_auth_state_ && dm_auth_state_->state.acceptor_id == peer_id && peer_id == from_id) {
                 assert(peer_id != self_id_);
                 if (!TryToAcceptEncryptionResponse(data.vmessage().v, peer_id, data.vid().v)) {
                     qCritical() << "failed to accept encryption response";
@@ -955,7 +973,7 @@ MTPUpdates Intermediary::ProcessMessage(const MTPUpdates& updates) {
         [&](const MTPDupdateShortMessage& data) {
             auto peer_id = peerFromMTP(MTP_peerUser(data.vuser_id()));
 
-            if (dm_auth_state_ && dm_auth_state_->acceptor_id == peer_id) {
+            if (dm_auth_state_ && dm_auth_state_->state.acceptor_id == peer_id) {
                 assert(peer_id != self_id_);
                 if (!TryToAcceptEncryptionResponse(data.vmessage().v, peer_id, data.vid().v)) {
                     qCritical() << "failed to accept encryption response";

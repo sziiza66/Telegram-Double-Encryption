@@ -69,27 +69,27 @@ DHAcceptorPrivateParams::~DHAcceptorPrivateParams() {
     ClearBytes(g_b);
 }
 
-DHAuthStatePtr MakeDH(PeerId acceptor_id) {
-    DHAuthStatePtr state = std::make_unique<DHAuthState>();
+DHAuthState MakeDH(PeerId acceptor_id) {
+    DHAuthState state;
 
     auto seed = bytes::vector(MTP::ModExpFirst::kRandomPowerSize);
     bytes::set_random(seed);
 
-    state->params.prime = bytes::make_vector(GoodPrime);
-    state->params.g = GetGoodG();
+    state.params.prime = bytes::make_vector(GoodPrime);
+    state.params.g = GetGoodG();
 
-    auto g_a_data = MTP::CreateModExp(state->params.g, state->params.prime, seed);
+    auto g_a_data = MTP::CreateModExp(state.params.g, state.params.prime, seed);
     if (g_a_data.modexp.empty()) {
         qCritical() << "AuthKey Error: could not generate good g_a.";
-        return nullptr;
+        return {};
     }
 
-    state->params.g_a = std::move(g_a_data.modexp);
-    state->params.a = std::move(g_a_data.randomPower);
+    state.params.g_a = std::move(g_a_data.modexp);
+    state.params.a = std::move(g_a_data.randomPower);
 
-    bytes::set_random(bytes::make_span(reinterpret_cast<char*>(&state->nonce), sizeof(state->nonce)));
+    bytes::set_random(bytes::make_span(reinterpret_cast<char*>(&state.nonce), sizeof(state.nonce)));
 
-    state->acceptor_id = acceptor_id;
+    state.acceptor_id = acceptor_id;
     return state;
 }
 

@@ -40,7 +40,7 @@ struct DHAcceptorPrivateParams {
 struct DHAuthState {
     DHInitiatorParams params;
     MTPint128 nonce;
-    PeerId acceptor_id;
+    PeerId acceptor_id = 0;
 };
 
 struct DHAuthPart {
@@ -52,7 +52,7 @@ struct DHAuthPart {
 
 using DHAuthStatePtr = std::unique_ptr<DHAuthState>;
 
-DHAuthStatePtr MakeDH(PeerId acceptor_id);
+DHAuthState MakeDH(PeerId acceptor_id);
 DHAcceptorPrivateParams MakeDHAcceptorPrivate(const DHAuthPart& initiator_part);
 
 bool IsGAGood(bytes::const_span g_a, bytes::const_span prime);

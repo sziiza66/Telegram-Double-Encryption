@@ -115,7 +115,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "double_encryption/texts_and_titles.h"
 #include "double_encryption/boxes/keys_list.h"
-#include "double_encryption/storage/settings_manager.h"
+#include "double_encryption/boxes/info_box.h"
+#include "double_encryption/storage/gpg_manager.h"
 
 namespace {
 
@@ -2663,12 +2664,19 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			_menu->addAction(
 				QString(DoubleEncryption::interpret_message_as_encryption_request_button_name),
 				crl::guard(controller, [=] {
-					controller->window().show(DoubleEncryption::PreparePublicKeysSelectionList(
-						controller,
-						[=](const DoubleEncryption::AuthKeyInfo& info) {
-							return intermediary->TryToAcceptEncryptionRequest(text, info.fingerprint, peer_id, msg_id.bare);
-						}
-					));
+					auto request_info = intermediary->TryToAcceptEncryptionRequest(text, peer_id, msg_id.bare);
+					if (!request_info.sig_fingerprint.isEmpty()) {
+						auto& gpg = DoubleEncryption::GPGManager::Instance();
+						controller->show(
+							Box<DoubleEncryption::InfoBox>(
+								"Secure connection established",
+								DoubleEncryption::MakeSecureConnectionInfo(
+									gpg.GetKeyDescription(request_info.sig_fingerprint, false),
+									gpg.GetKeyDescription(request_info.enc_fingerprint, true)
+								)
+							)
+						);
+					}
 				}),
 				&st::menuIconLock
 			);

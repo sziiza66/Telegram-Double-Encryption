@@ -16,6 +16,14 @@ class GPGManager {
         QByteArray stdout_data;
         QByteArray stderr_data;
     };
+
+    struct DecryptVerifyResult {
+        QString signer_fingerprint;
+        QString encryption_key_fingerprint;
+        bool signature_valid = false;
+        QByteArray plaintext;
+    };
+
 public:
     static GPGManager& Instance();
 
@@ -31,9 +39,17 @@ public:
     QByteArray EncryptData(const QByteArray& data, const QString& fingerprint);
     QByteArray DecryptData(const QByteArray& data);
 
+    QByteArray SignAndEncryptData(const QByteArray& data,
+                              const QString& signer_fingerprint,
+                              const QString& recipient_fingerprint);
+    DecryptVerifyResult DecryptAndVerifyData(const QByteArray& data);
+    
+    QString GetKeyDescription(const QString& fingerprint, bool secret);
+    
 private:
     explicit GPGManager(const Path& gpg_path, const Path& homedir);
-
+    
+    QString FindSecretKeyFingerprintByKeyId(const QString& key_id);
     std::vector<AuthKeyInfo> ListKeysInternal(bool secret);
     QStringList GetGpgArgs(const QStringList& extra = {}) const;
     GpgResult RunGpg(const QStringList& args, const QByteArray& input = {}) const;

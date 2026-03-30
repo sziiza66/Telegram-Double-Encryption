@@ -34,6 +34,14 @@ class Intermediary {
         DISGUISED = 2,
     };
 
+    struct DMAuthState {
+        DHAuthState state;
+        QString sig_fingerprint;
+        QString enc_fingerprint;
+    };
+
+    using DMAuthStatePtr = std::unique_ptr<DMAuthState>;
+
 public:
     using DoneCallback = std::function<void(const MTPUpdates&, const MTP::Response&)>;
     using FailCallback = std::function<void(const MTP::Error&, const MTP::Response&)>;
@@ -51,8 +59,17 @@ public:
     void EnableEncryptionForPeer(EncryptionKeyPtr key, PeerId peer_id, MsgId64 msg_begin_id);
     void DisableEncryptionForPeer(PeerId peer_id);
     void SendE2EServiceMessage(const QString& text, PeerId peer_id, DoneCallback done, FailCallback fail);
-    bool TryToEstablishSecureConnectionWithUser(not_null<Window::SessionController*> controller, const QString& fingerprint, PeerId peer_id);
-    bool TryToAcceptEncryptionRequest(const QString& request, const QString& fingerprint, PeerId peer_id, MsgId64 msg_id);
+    bool TryToEstablishSecureConnectionWithUser(not_null<Window::SessionController*> controller,
+                                                const QString& enc_fingerprint,
+                                                const QString& sig_fingerprint,
+                                                PeerId peer_id);
+
+    struct EncryptionRequestInfo {
+        QString sig_fingerprint;
+        QString enc_fingerprint;
+    };
+
+    EncryptionRequestInfo TryToAcceptEncryptionRequest(const QString& request, PeerId peer_id, MsgId64 msg_id);
     bool TryToAcceptEncryptionResponse(const QByteArray& response, PeerId peer_id, MsgId64 msg_id);
 
     // Ничего не делаем, если для сообщения сделать нечего.
@@ -127,7 +144,7 @@ private:
 
 private:
     SecretStorage storage_;
-    DHAuthStatePtr dm_auth_state_;
+    DMAuthStatePtr dm_auth_state_;
     std::shared_ptr<rpl::event_stream<PeerId>> auth_stream_;
     Account* account_;  // Не ноль, аккаунт гарантированно существует, пока существует Intermediary, т.к. первый им
     // управляет через unique_ptr

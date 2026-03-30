@@ -1776,20 +1776,27 @@ void Filler::fillContextMenuActions() {
 				if (controller->showFrozenError()) {
 					return;
 				}
-				controller->show(DoubleEncryption::PreparePublicKeysSelectionList(controller, 
-					[=](const DoubleEncryption::AuthKeyInfo& info) {
-						bool success = intermediary->TryToEstablishSecureConnectionWithUser(controller, info.fingerprint, peer_id);
-						if (success && !controller->showFrozenError()) {
-							controller->show(Box<DoubleEncryption::WaitBox>(
-								DoubleEncryption::secure_connection_wait_box_text_,
-								[=]() {
-									intermediary->CancelAuth();
-								},
-								intermediary->GetAuthStream(),
-								peer_id
-							));
-						}
-						return success;
+				controller->show(DoubleEncryption::PreparePublicKeysSelectionList(
+					controller, 
+					[=](const DoubleEncryption::AuthKeyInfo& pub) {
+						controller->show(DoubleEncryption::PreparePrivateKeysSelectionList(
+							controller,
+							[=](const DoubleEncryption::AuthKeyInfo& priv) {
+								bool success = intermediary->TryToEstablishSecureConnectionWithUser(controller, pub.fingerprint, priv.fingerprint, peer_id);
+								if (success && !controller->showFrozenError()) {
+									controller->show(Box<DoubleEncryption::WaitBox>(
+										DoubleEncryption::secure_connection_wait_box_text_,
+										[=]() {
+											intermediary->CancelAuth();
+										},
+										intermediary->GetAuthStream(),
+										peer_id
+									));
+								}
+								return success;
+							}
+						));
+						return true;
 					}
 				));
 			} else {

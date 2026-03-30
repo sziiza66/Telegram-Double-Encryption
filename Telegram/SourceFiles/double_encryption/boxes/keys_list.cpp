@@ -94,4 +94,17 @@ object_ptr<Ui::BoxContent> PreparePublicKeysSelectionList(not_null<Window::Sessi
     );
 }
 
+object_ptr<Ui::BoxContent> PreparePrivateKeysSelectionList(not_null<Window::SessionController*> controller,
+                                                           std::function<bool(const AuthKeyInfo&)> selection_action) {
+    return PrepareSelectionKeysList(
+        []() {
+            auto key_infos = GPGManager::Instance().ListPrivateKeys();
+            std::sort(key_infos.begin(), key_infos.end(),
+                      [](const auto& info1, const auto& info2) { return info1.creation_time < info2.creation_time; });
+            return key_infos;
+        },
+        selection_action
+    );
+}
+
 }  // namespace DoubleEncryption
