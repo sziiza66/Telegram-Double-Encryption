@@ -430,25 +430,13 @@ MTPmessages_EditMessage Intermediary::ProcessRequest(const MTPmessages_EditMessa
 }
 
 MTPmessages_SaveDraft Intermediary::ProcessRequest(const MTPmessages_SaveDraft& request) {
-    return request;  // temporary
-
     auto peer_id = peerFromMTPInput(request._peer);
     auto key = storage_.GetCurrentEncryptionKey(peer_id);
     if (!key) {
         return request;
     }
 
-    auto new_flags = request._flags.v | MTPmessages_SaveDraft::Flag::f_entities;
-    return MTPmessages_SaveDraft(
-        MTP_flags(new_flags),
-        request._reply_to,
-        request._peer,
-        EncryptMTPString(request._message, key),
-        EncryptMTPMessageEntities(request._entities, key),
-        request._media,
-        request._effect,
-        request._suggested_post
-    );
+    return MTPmessages_SaveDraft();
 }
 
 QByteArray Intermediary::SerializeInitiatorDH(const DHAuthState& state, PeerId initiator_id) {
