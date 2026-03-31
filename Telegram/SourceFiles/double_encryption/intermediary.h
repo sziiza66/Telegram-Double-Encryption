@@ -58,7 +58,7 @@ public:
     void SwitchEncryptionForSelf();
     void EnableEncryptionForPeer(EncryptionKeyPtr key, PeerId peer_id, MsgId64 msg_begin_id);
     void DisableEncryptionForPeer(PeerId peer_id);
-    void SendE2EServiceMessage(const QString& text, PeerId peer_id, DoneCallback done, FailCallback fail);
+    void SendE2EServiceMessage(const QByteArray& text, PeerId peer_id, DoneCallback done, FailCallback fail);
     bool TryToEstablishSecureConnectionWithUser(not_null<Window::SessionController*> controller,
                                                 const QString& enc_fingerprint,
                                                 const QString& sig_fingerprint,

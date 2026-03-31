@@ -95,7 +95,7 @@ void Intermediary::DisableEncryptionForPeer(PeerId peer_id) {
     }
 }
 
-void Intermediary::SendE2EServiceMessage(const QString& text, PeerId peer_id, DoneCallback done, FailCallback fail) {
+void Intermediary::SendE2EServiceMessage(const QByteArray& text, PeerId peer_id, DoneCallback done, FailCallback fail) {
     auto session = &account_->session();
     auto history = session->data().history(peer_id);
     auto peer = history->peer;

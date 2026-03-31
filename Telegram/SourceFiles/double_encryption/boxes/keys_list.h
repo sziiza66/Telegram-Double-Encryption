@@ -14,6 +14,7 @@ namespace DoubleEncryption {
 
 object_ptr<Ui::BoxContent> PrepareManageKeysList(not_null<Window::SessionController*> controller, bool pub);
 object_ptr<Ui::BoxContent> PrepareSelectionKeysList(std::function<std::vector<AuthKeyInfo>()> fetcher,
+                                                    const QString& title,
                                                     std::function<bool(AuthKeyInfo)> button_callback);
 object_ptr<Ui::BoxContent> PreparePublicKeysSelectionList(not_null<Window::SessionController*> controller, std::function<bool(const AuthKeyInfo&)> selection_action);
 object_ptr<Ui::BoxContent> PreparePrivateKeysSelectionList(not_null<Window::SessionController*> controller, std::function<bool(const AuthKeyInfo&)> selection_action);

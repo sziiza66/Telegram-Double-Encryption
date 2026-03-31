@@ -196,7 +196,7 @@ GPGManager::DecryptVerifyResult GPGManager::DecryptAndVerifyData(const QByteArra
 }
 
 QString GPGManager::GetKeyDescription(const QString& fingerprint, bool secret) {
-    auto output = RunGpg({secret ? "--list-secret-keys" : "--list-public-keys"});
+    auto output = RunGpg({secret ? "--list-secret-keys" : "--list-public-keys", fingerprint});
     if (output.exit_code == 0) {
         return output.stdout_data;
     }

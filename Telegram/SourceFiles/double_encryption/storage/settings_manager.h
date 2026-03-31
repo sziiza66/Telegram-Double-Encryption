@@ -19,10 +19,8 @@ class SettingsManager {
         Path gpg_homedir_path = "";
         QString device_model = "";
         QString system_version = "";
-        // QString disguise_passphrase = "unlock";
         std::string api_hash = "b18441a1ff607e10a989891a5462e627";
         int api_id = 2040;
-        // bool is_client_disguised = false;
         bool is_properly_initialized = true;
     };
 public:
