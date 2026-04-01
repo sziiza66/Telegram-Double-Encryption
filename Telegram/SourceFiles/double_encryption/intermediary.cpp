@@ -40,6 +40,37 @@ size_t CalculateRandomPadding(size_t size) {
     return padding_size;
 }
 
+MTPinputReplyTo SanitizeMTPinputReplyTo(const MTPinputReplyTo& reply_to) {
+    return reply_to.match(
+        [&](const MTPDinputReplyToMessage& data) {
+            auto flags = data.vflags().v;
+            flags &= ~(MTPDinputReplyToMessage::Flag::f_quote_text |
+                       MTPDinputReplyToMessage::Flag::f_quote_entities |
+                       MTPDinputReplyToMessage::Flag::f_quote_offset);
+            return MTP_inputReplyToMessage(
+                MTP_flags(flags),
+                data.vreply_to_msg_id(),
+                data.vtop_msg_id() ? *data.vtop_msg_id() : MTP_int(0),
+                data.vreply_to_peer_id() ? *data.vreply_to_peer_id() : MTPInputPeer(),
+                tl::make_string(),
+                MTPVector<MTPMessageEntity>(),
+                MTP_int(0),
+                data.vmonoforum_peer_id() ? *data.vmonoforum_peer_id() : MTPInputPeer(),
+                data.vtodo_item_id() ? *data.vtodo_item_id() : MTP_int(0)
+            );
+        }, [&](const MTPDinputReplyToStory& data) {
+            return MTP_inputReplyToStory(
+                data.vpeer(),
+                data.vstory_id()
+            );
+        }, [&](const MTPDinputReplyToMonoForum& data) {
+            return MTP_inputReplyToMonoForum(
+                data.vmonoforum_peer_id()
+            );
+        }
+    );
+}
+
 }  // namespace
 
 Intermediary::Intermediary(Account* account, UserId self_id)
@@ -346,7 +377,7 @@ MTPmessages_SendMessage Intermediary::ProcessRequest(const MTPmessages_SendMessa
     return MTPmessages_SendMessage(
         MTP_flags(new_flags),
         request._peer,
-        request._reply_to,
+        SanitizeMTPinputReplyTo(request._reply_to),
         EncryptMTPString(request._message, key),
         request._random_id,
         request._reply_markup,
@@ -372,7 +403,7 @@ MTPmessages_SendMedia Intermediary::ProcessRequest(const MTPmessages_SendMedia& 
     return MTPmessages_SendMedia(
         MTP_flags(new_flags),
         request._peer,
-        request._reply_to,
+        SanitizeMTPinputReplyTo(request._reply_to),
         request._media,
         EncryptMTPString(request._message, key),
         request._random_id,
@@ -398,7 +429,7 @@ MTPmessages_sendMultiMedia Intermediary::ProcessRequest(const MTPmessages_sendMu
     return MTPmessages_sendMultiMedia(
         request._flags,
         request._peer,
-        request._reply_to,
+        SanitizeMTPinputReplyTo(request._reply_to),
         EncryptMTPMultiMedia(request._multi_media, key),
         request._schedule_date,
         request._send_as,
@@ -436,7 +467,25 @@ MTPmessages_SaveDraft Intermediary::ProcessRequest(const MTPmessages_SaveDraft& 
         return request;
     }
 
-    return MTPmessages_SaveDraft();
+    return MTPmessages_SaveDraft(
+        MTP_flags(MTPmessages_saveDraft::Flag::f_no_webpage),
+        MTP_inputReplyToStory(
+            MTP_inputPeerEmpty(),
+            MTP_int(0)
+        ),
+        MTP_inputPeerEmpty(),
+        tl::make_string(),
+        MTPVector<MTPMessageEntity>(),
+        MTP_inputMediaEmpty(),
+        MTP_long(0),
+        MTP_suggestedPost(
+            MTP_flags(0),
+            MTP_starsTonAmount(
+                MTP_long(0)
+            ),
+            MTP_int(0)
+        )
+    );
 }
 
 QByteArray Intermediary::SerializeInitiatorDH(const DHAuthState& state, PeerId initiator_id) {
