@@ -40,7 +40,7 @@ size_t CalculateRandomPadding(size_t size) {
     return padding_size;
 }
 
-MTPinputReplyTo SanitizeMTPinputReplyTo(const MTPinputReplyTo& reply_to) {
+MTPInputReplyTo SanitizeMTPinputReplyTo(const MTPinputReplyTo& reply_to) {
     return reply_to.match(
         [&](const MTPDinputReplyToMessage& data) {
             auto flags = data.vflags().v;
@@ -115,7 +115,7 @@ void Intermediary::EnableEncryptionForPeer(EncryptionKeyPtr key, PeerId peer_id,
     assert(key);
     // auto last_message = account_->session().data().history(peer_id)->lastMessage();
     // MsgId64 last_msg_id = last_message ? last_message->id.bare : 0;
-    storage_.OpenNewInterval(peer_id, msg_begin_id, key);    
+    storage_.OpenNewInterval(peer_id, msg_begin_id, key);
 }
 
 void Intermediary::DisableEncryptionForPeer(PeerId peer_id) {
@@ -276,7 +276,7 @@ Intermediary::EncryptionRequestInfo Intermediary::TryToAcceptEncryptionRequest(c
     auto acceptor_private = MakeDHAcceptorPrivate(request_deserialized);
 
     auto data = SerializeDHPart(request_deserialized, acceptor_private.g_b);
-    
+
     auto encrypted_data = GPGManager::Instance().SignAndEncryptData(data, enc_fingerprint, sig_fingerprint);
     if (encrypted_data.isEmpty()) {
         return {};
@@ -308,7 +308,7 @@ Intermediary::EncryptionRequestInfo Intermediary::TryToAcceptEncryptionRequest(c
         {{peer_id, msg_id}},
         true
     );
-    
+
     EnableEncryptionForPeer(key, peer_id, last_msg_id + 1);
     return {sig_fingerprint, enc_fingerprint};
 }
@@ -320,7 +320,7 @@ bool Intermediary::TryToAcceptEncryptionResponse(const QByteArray& response, Pee
     assert(dm_auth_state_ && dm_auth_state_->state.acceptor_id == peer_id && peer_id != self_id_);
 
     auto [sig_fingerprint, enc_fingerprint, ok, decrypted] = GPGManager::Instance().DecryptAndVerifyData(FromBase91(response));
-    
+
     if (!ok ||
         decrypted.isEmpty() ||
         sig_fingerprint.isEmpty() ||
@@ -373,11 +373,12 @@ MTPmessages_SendMessage Intermediary::ProcessRequest(const MTPmessages_SendMessa
     if (!key) {
         return request;
     }
+    bool has_reply_to = request._flags.v & MTPmessages_SendMessage::Flag::f_reply_to;
     auto new_flags = request._flags.v | MTPmessages_SendMessage::Flag::f_entities;
     return MTPmessages_SendMessage(
         MTP_flags(new_flags),
         request._peer,
-        SanitizeMTPinputReplyTo(request._reply_to),
+        has_reply_to ? SanitizeMTPinputReplyTo(request._reply_to) : request._reply_to,
         EncryptMTPString(request._message, key),
         request._random_id,
         request._reply_markup,
@@ -399,11 +400,12 @@ MTPmessages_SendMedia Intermediary::ProcessRequest(const MTPmessages_SendMedia& 
     if (!key) {
         return request;
     }
+    bool has_reply_to = request._flags.v & MTPmessages_SendMedia::Flag::f_reply_to;
     auto new_flags = request._flags.v | MTPmessages_SendMedia::Flag::f_entities;
     return MTPmessages_SendMedia(
         MTP_flags(new_flags),
         request._peer,
-        SanitizeMTPinputReplyTo(request._reply_to),
+        has_reply_to ? SanitizeMTPinputReplyTo(request._reply_to) : request._reply_to,
         request._media,
         EncryptMTPString(request._message, key),
         request._random_id,
@@ -426,10 +428,11 @@ MTPmessages_sendMultiMedia Intermediary::ProcessRequest(const MTPmessages_sendMu
     if (!key) {
         return request;
     }
+    bool has_reply_to = request._flags.v & MTPmessages_sendMultiMedia::Flag::f_reply_to;
     return MTPmessages_sendMultiMedia(
         request._flags,
         request._peer,
-        SanitizeMTPinputReplyTo(request._reply_to),
+        has_reply_to ? SanitizeMTPinputReplyTo(request._reply_to) : request._reply_to,
         EncryptMTPMultiMedia(request._multi_media, key),
         request._schedule_date,
         request._send_as,
@@ -491,7 +494,7 @@ MTPmessages_SaveDraft Intermediary::ProcessRequest(const MTPmessages_SaveDraft& 
 QByteArray Intermediary::SerializeInitiatorDH(const DHAuthState& state, PeerId initiator_id) {
     bytes::array<kSaltSize> salt;
     bytes::set_random(salt);
-    
+
     uint32 g_a_size = state.params.g_a.size();
     uint32 prime_size = state.params.prime.size();
 
@@ -502,13 +505,13 @@ QByteArray Intermediary::SerializeInitiatorDH(const DHAuthState& state, PeerId i
                             + sizeof(state.params.g)
                             + 2 * sizeof(state.acceptor_id.value)
                             + sizeof(state.nonce)
-                            + kSaltSize; 
+                            + kSaltSize;
     QByteArray result;
     result.resize(total_size);
     char* dst = result.data();
     auto serializer = [&](const char* src, uint32 size) {
         ::memcpy(dst, src, size);
-        dst += size; 
+        dst += size;
     };
     serializer(reinterpret_cast<const char*>(&g_a_size), sizeof(g_a_size));
     serializer(reinterpret_cast<const char*>(state.params.g_a.data()), g_a_size);
@@ -524,7 +527,7 @@ QByteArray Intermediary::SerializeInitiatorDH(const DHAuthState& state, PeerId i
 
 DHAuthPart Intermediary::DeserializeDHPart(const QByteArray& serialized) {
     DHAuthPart state;
-    const char* src = serialized.constData(); 
+    const char* src = serialized.constData();
     uint32 total_size = 0;
     auto deserializer = [&](char* dst, uint32 size) {
         total_size += size;
@@ -561,7 +564,7 @@ DHAuthPart Intermediary::DeserializeDHPart(const QByteArray& serialized) {
 QByteArray Intermediary::SerializeDHPart(const DHAuthPart& initiator_part, bytes::const_span g_b) {
     bytes::array<kSaltSize> salt;
     bytes::set_random(salt);
-    
+
     uint32 g_b_size = g_b.size();
     uint32 prime_size = initiator_part.params.prime.size();
 
@@ -578,7 +581,7 @@ QByteArray Intermediary::SerializeDHPart(const DHAuthPart& initiator_part, bytes
     char* dst = result.data();
     auto serializer = [&](const char* src, uint32 size) {
         ::memcpy(dst, src, size);
-        dst += size; 
+        dst += size;
     };
     serializer(reinterpret_cast<const char*>(&g_b_size), sizeof(g_b_size));
     serializer(reinterpret_cast<const char*>(g_b.data()), g_b_size);
@@ -670,7 +673,7 @@ MTPVector<MTPMessageEntity> Intermediary::EncryptMTPMessageEntities(const MTPVec
     mtpBuffer buf;
     entities.write(buf);
     QByteArray bytes(reinterpret_cast<const char*>(buf.constData()), buf.size() * sizeof(buf[0]));
-    
+
     bytes = EncryptBytes(bytes, key);
     // Кладём сюда id чата, куда отправляется сообщение с этими entities.
     constexpr auto msg_id_size = sizeof(random_id);
@@ -748,7 +751,7 @@ QByteArray Intermediary::DecryptBytes(QByteArray bytes, EncryptionKeyPtr key) co
     DoubleEncryption::aesIgeDecrypt(encrypted_text, text.data(), data_size, key, msgKey);
     uint16 text_size;
     ::memcpy(&text_size, text.constData(), sizeof(text_size));
-    
+
     if (text_size > text.size() - sizeof(text_size)) {
         return bytes;
     }
@@ -781,7 +784,7 @@ MTPVector<MTPMessageEntity> Intermediary::DecryptMTPMessageEntities(const MTPVec
 
     QByteArray data = QByteArray::fromBase64(entities.v[0].c_messageEntityTextUrl().vurl().v.last(data_size), QByteArray::Base64UrlEncoding);
     ::memcpy(&random_id, &data[data.size() - msg_id_size], msg_id_size);
-    
+
     PeerId peer_id = account_->session().data().messageSentData(random_id).peerId;
     if (!peer_id) {
         return entities;
@@ -811,7 +814,7 @@ MTPVector<MTPMessageEntity> Intermediary::DecryptMTPMessageEntities(const MTPVec
     return decrypted_vec;
 }
 
-MTPVector<MTPMessageEntity> Intermediary::DecryptMTPMessageEntities(const MTPVector<MTPMessageEntity>& entities, EncryptionKeyPtr key) const {    
+MTPVector<MTPMessageEntity> Intermediary::DecryptMTPMessageEntities(const MTPVector<MTPMessageEntity>& entities, EncryptionKeyPtr key) const {
     // entities.size() > 0, иначе вернем entities как есть и ошибку.
     if (entities.v.isEmpty()) {
         return entities;
@@ -1020,7 +1023,7 @@ MTPUpdates Intermediary::ProcessMessage(const MTPUpdates& updates) {
             }
 
             auto [key, msg_end_id] = storage_.FindKey(peer_id, data.vid().v);
-            
+
             assert(data.vid().v < msg_end_id);
 
             return MTP_updateShortMessage(
@@ -1103,7 +1106,7 @@ MTPUpdates Intermediary::ProcessMessage(const MTPUpdates& updates) {
                 data.vpts(),
                 data.vpts_count(),
                 data.vdate(),
-                UnpackConditional(data.vmedia()), 
+                UnpackConditional(data.vmedia()),
                 entities,
                 UnpackConditional(data.vttl_period())
             );
@@ -1133,7 +1136,7 @@ MTPupdates_Difference Intermediary::ProcessMessage(const MTPupdates_Difference& 
                 data.vintermediate_state()
             );
         },
-        [&](const MTPDupdates_differenceTooLong& data) { 
+        [&](const MTPDupdates_differenceTooLong& data) {
             return MTP_updates_differenceTooLong(data.vpts());
         });
 }
