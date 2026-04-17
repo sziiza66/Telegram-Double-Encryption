@@ -84,7 +84,7 @@ public:
 
     MTPmessages_SendMessage ProcessRequest(const MTPmessages_SendMessage& request);
     MTPmessages_SendMedia ProcessRequest(const MTPmessages_SendMedia& request);
-    MTPmessages_sendMultiMedia ProcessRequest(const MTPmessages_sendMultiMedia& request);
+    MTPmessages_SendMultiMedia ProcessRequest(const MTPmessages_SendMultiMedia& request);
     MTPmessages_EditMessage ProcessRequest(const MTPmessages_EditMessage& request);
     MTPmessages_SaveDraft ProcessRequest(const MTPmessages_SaveDraft& request);
 
